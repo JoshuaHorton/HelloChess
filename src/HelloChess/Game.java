@@ -23,6 +23,11 @@ public class Game {
 	Piece piece_to_move;
 	PieceColor move_color = PieceColor.WHITE;
 	
+	public List<Piece> getCapturedWhitePieces() { return capturedWhitePieces; }
+	public List<Piece> getCapturedBlackPieces() { return capturedBlackPieces; }
+	private List<Piece> capturedWhitePieces = new ArrayList<>();
+	private List<Piece> capturedBlackPieces = new ArrayList<>();
+	
 	
 	public Game() {
 		System.out.println("Setting Pieces.");
@@ -88,63 +93,119 @@ public class Game {
 	 * @param moveInput Example: "e2 e4"
 	 * @return true if the move was legal and executed; false otherwise.
 	 */
-	public boolean processMove(String moveInput) {
-	    // 1. Parse the string (e.g., split "e2 e4" into "e2" and "e4")
-	    // 2. Validate the move using your existing rules
-	    // 3. If valid:
-	    //      - Update the internal board array
-	    //      - Change the turn (White -> Black)
-	    //      - Return true
-	    // 4. If invalid:
-	    //      - Return false (do not change state)
-	    
-	    // Example implementation logic:
+	public MoveResult processMove(String moveInput) {
 	    try {
 	        String[] parts = moveInput.split(" ");
 	        String from = parts[0];
 	        String to = parts[1];
 
-	       // if (this.isValidMove(from, to)) { // Use your existing validation logic
-	            this.executeInternalMove(from, to); 
-	            return true;
-	      //  }
+			Piece piece_to_move = last_position.get_piece_at_square(from);
+			if (piece_to_move == null) return MoveResult.invalid("No piece at start square");
+			
+			if (!piece_to_move.getColor().equals(move_color.toString())) return MoveResult.invalid("Not your turn");
+
+	        if (this.isValidMove(from, to, piece_to_move)) {
+	            return this.executeInternalMove(from, to, piece_to_move); 
+	        } else {
+				return MoveResult.invalid("Illegal move pattern or blocked");
+			}
 	    } catch (Exception e) {
-	        return false; // Catch parsing errors
+	        return MoveResult.invalid("Error processing move: " + e.getMessage());
 	    }
-	    // return false;
 	}
 	
-	private void executeInternalMove(String sFrom, String sTo) {
-		String start_pos = "", dest_pos = "";
-		
+	private MoveResult executeInternalMove(String sFrom, String sTo, Piece pieceToMove) {
 		position_no++;
-		// Debugging moves
 		System.out.println("Move " + position_no);
 		new_position = new Position(position_no, labels);
 		new_position.setPositionMap(last_position.getPositionMap());
 		
-		
-		start_pos = sFrom;
-		dest_pos = sTo;
 		System.out.println(move_color + " has the move. Moving from " + sFrom + " to " + sTo + "\n");
 		
-		if ( !start_pos.equals("-1") && !dest_pos.equals("-1") ) { // replace this with some validation logic or how to end the game
-			piece_to_move = new_position.get_piece_at_square(start_pos);
-			if (piece_to_move != null) {
-				System.out.println("Moving " + piece_to_move.getName() + " at square " + start_pos + " to " + dest_pos);
-				new_position.setPosition(piece_to_move, start_pos, dest_pos);
-				this.updateBoardwithPosition(new_position);
-				position_history.put(position_no, new_position);
+		Piece capturedPiece = new_position.setPosition(pieceToMove, sFrom, sTo);
+		if (capturedPiece != null) {
+			if (capturedPiece.getColor().equals("WHITE")) {
+				capturedWhitePieces.add(capturedPiece);
 			} else {
-				System.err.println("Invalid Move - No Piece at Square " + start_pos);
+				capturedBlackPieces.add(capturedPiece);
 			}
-			last_position = new_position;
-			if (move_color == PieceColor.WHITE) { move_color = PieceColor.BLACK; } else { move_color = PieceColor.WHITE; }
-		} else { 
-			position_no = -1; 
-			// game over 
 		}
+		this.updateBoardwithPosition(new_position);
+		position_history.put(position_no, new_position);
+		
+		last_position = new_position;
+		if (move_color == PieceColor.WHITE) { move_color = PieceColor.BLACK; } else { move_color = PieceColor.WHITE; }
+		
+		return MoveResult.valid(capturedPiece, sFrom + " " + sTo);
+	}
 	
+	private boolean isValidMove(String start_pos, String dest_pos, Piece piece) {
+		int startCol = start_pos.charAt(0) - 'a';
+		int startRow = start_pos.charAt(1) - '1';
+		int destCol = dest_pos.charAt(0) - 'a';
+		int destRow = dest_pos.charAt(1) - '1';
+
+		int dCol = destCol - startCol;
+		int dRow = destRow - startRow;
+		
+		Piece targetPiece = last_position.get_piece_at_square(dest_pos);
+		if (targetPiece != null && targetPiece.getColor().equals(piece.getColor())) {
+			return false;
+		}
+
+		switch (piece.getType()) {
+			case "PAWN":
+				int direction = piece.getColor().equals("WHITE") ? 1 : -1;
+				int startRank = piece.getColor().equals("WHITE") ? 1 : 6;
+				
+				if (dCol == 0) {
+					if (dRow == direction && targetPiece == null) return true;
+					if (dRow == 2 * direction && startRow == startRank && targetPiece == null && last_position.get_piece_at_square("" + start_pos.charAt(0) + (char)(start_pos.charAt(1) + direction)) == null) return true;
+				}
+				if (Math.abs(dCol) == 1 && dRow == direction && targetPiece != null) return true;
+				return false;
+
+			case "KNIGHT":
+				if ((Math.abs(dCol) == 2 && Math.abs(dRow) == 1) || (Math.abs(dCol) == 1 && Math.abs(dRow) == 2)) return true;
+				return false;
+
+			case "BISHOP":
+				if (Math.abs(dCol) != Math.abs(dRow)) return false;
+				return !isPathBlocked(startCol, startRow, destCol, destRow);
+
+			case "ROOK":
+				if (dCol != 0 && dRow != 0) return false;
+				return !isPathBlocked(startCol, startRow, destCol, destRow);
+
+			case "QUEEN":
+				if (dCol != 0 && dRow != 0 && Math.abs(dCol) != Math.abs(dRow)) return false;
+				return !isPathBlocked(startCol, startRow, destCol, destRow);
+
+			case "KING":
+				if (Math.abs(dCol) <= 1 && Math.abs(dRow) <= 1) return true;
+				return false;
+				
+			default:
+				return false;
+		}
+	}
+
+	private boolean isPathBlocked(int startCol, int startRow, int destCol, int destRow) {
+		int stepCol = Integer.signum(destCol - startCol);
+		int stepRow = Integer.signum(destRow - startRow);
+		
+		int c = startCol + stepCol;
+		int r = startRow + stepRow;
+		
+		while (c != destCol || r != destRow) {
+			String square = "" + (char)('a' + c) + (char)('1' + r);
+			if (last_position.get_piece_at_square(square) != null) {
+				return true;
+			}
+			c += stepCol;
+			r += stepRow;
+		}
+		return false;
 	}
 	
 	public void updateBoardwithPosition(Position position_to_set) {

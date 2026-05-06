@@ -56,23 +56,15 @@ public class Position {
 		return this.positionID;
 	}
 	
-	public Boolean setPosition(Piece piece, String start_position, String end_position) {
+	public Piece setPosition(Piece piece, String start_position, String end_position) {
 		if (!committed){
-			if (position_map.get(end_position)==null) { // there's no piece in end_position currently
-				position_map.replace(end_position, piece);
-				// System.out.println("Removing " + piece.getName() + " at " + start_position);
-				String to_be_removed = null;
-				if (position_map.get(start_position)!=null) {
-					to_be_removed = position_map.get(start_position).getName();
-				}
-				// System.out.println("  Piece in position map before remove: " + to_be_removed);
-				position_map.replace(start_position, null);
-				// System.out.println("  Piece in position map after remove: " + position_map.get(start_position));
-			}
-			return true;
+			Piece capturedPiece = position_map.get(end_position);
+			position_map.replace(end_position, piece);
+			position_map.replace(start_position, null);
+			return capturedPiece;
 		} else {
 			System.out.println("setPosition failure");
-			return false;
+			return null;
 		}
 	}
 	

@@ -17,6 +17,9 @@ public class ChessGUI extends JFrame {
 	// Move History 
 	private final java.util.List<String> history = new java.util.ArrayList<>();
 	private int moveCount = 1; // To track move numbers (e.g., 1. e2e4)
+	private JTextArea historyTextArea = new JTextArea(20, 15);
+	private JLabel capturedWhiteLabel = new JLabel(" Captured by Black: ");
+	private JLabel capturedBlackLabel = new JLabel(" Captured by White: ");
 
     // Record for clean coordinate handling
     private record Position(int row, int col) {}
@@ -53,6 +56,22 @@ public class ChessGUI extends JFrame {
         statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         statusLabel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         add(statusLabel, BorderLayout.SOUTH);
+        
+        // Add History Panel
+        historyTextArea.setEditable(false);
+        historyTextArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        JScrollPane scrollPane = new JScrollPane(historyTextArea);
+        scrollPane.setBorder(BorderFactory.createTitledBorder("Move History"));
+        add(scrollPane, BorderLayout.EAST);
+        
+        // Add Captured Pieces Panels
+        JPanel capturedPanel = new JPanel(new GridLayout(2, 1));
+        capturedPanel.setBorder(BorderFactory.createTitledBorder("Captured Pieces"));
+        capturedWhiteLabel.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 24));
+        capturedBlackLabel.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 24));
+        capturedPanel.add(capturedWhiteLabel);
+        capturedPanel.add(capturedBlackLabel);
+        add(capturedPanel, BorderLayout.WEST);
     }
 
     private void initializeData() {
@@ -153,16 +172,17 @@ public class ChessGUI extends JFrame {
 
         // --- INTERFACE POINT WITH BACKEND ---
         // Assuming your backend controller is named 'chessGame'
-        boolean success = backend.processMove(command);
+        MoveResult result = backend.processMove(command);
         
         // For now, we simulate success to update the UI
         // boolean success = true; 
 
-        if (success) {
+        if (result.isValid()) {
         	// Record the move in the history list
             // Format: "1. e2e4" or "1. ... e7e5"
             String logEntry = (whiteTurn) ? (moveCount + ". " + command) : ("    ... " + command);
             history.add(logEntry);
+            historyTextArea.append(logEntry + "\n");
             
             if (!whiteTurn) moveCount++; // Increment move number after Black plays
             // Update the GUI internal state only if the move was legal
@@ -170,12 +190,33 @@ public class ChessGUI extends JFrame {
             boardState[to.row()][to.col()] = piece;
             boardState[from.row()][from.col()] = "";
             
+            if (result.capturedPiece() != null) {
+                if (result.capturedPiece().getColor().equals("WHITE")) {
+                    capturedWhiteLabel.setText(capturedWhiteLabel.getText() + getUnicodePiece(result.capturedPiece()));
+                } else {
+                    capturedBlackLabel.setText(capturedBlackLabel.getText() + getUnicodePiece(result.capturedPiece()));
+                }
+            }
+            
             whiteTurn = !whiteTurn;
             statusLabel.setText(whiteTurn ? "White's Turn" : "Black's Turn");
         } else {
             // Optional: show a dialog if the move was illegal
-            JOptionPane.showMessageDialog(this, "Illegal Move: " + command);
+            JOptionPane.showMessageDialog(this, "Illegal Move: " + result.message());
         }
+    }
+    
+    private String getUnicodePiece(Piece p) {
+        boolean isWhite = p.getColor().equals("WHITE");
+        return switch (p.getType()) {
+            case "KING" -> isWhite ? "♔" : "♚";
+            case "QUEEN" -> isWhite ? "♕" : "♛";
+            case "ROOK" -> isWhite ? "♖" : "♜";
+            case "BISHOP" -> isWhite ? "♗" : "♝";
+            case "KNIGHT" -> isWhite ? "♘" : "♞";
+            case "PAWN" -> isWhite ? "♙" : "♟";
+            default -> "";
+        };
     }
 
     /**

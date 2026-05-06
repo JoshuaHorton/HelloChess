@@ -1,0 +1,37 @@
+# HelloChess Refactoring Walkthrough
+
+The backend architecture fixes and GUI enhancements have been successfully completed! Here is a summary of the changes we made to your prototype.
+
+## Changes Made
+
+### 1. Fixed the Capture Bug
+- **File:** `Position.java`
+- **What Changed:** We modified `setPosition()` so that it no longer ignores a move if the destination square is occupied. It now safely overwrites the occupied square and returns the `Piece` that was captured, effectively syncing the backend with the GUI's drag-and-drop visuals.
+
+### 2. Implemented Basic Move Validation
+- **File:** `Game.java`
+- **What Changed:** Added an `isValidMove()` method to validate moves based on the geometric rules for each piece (e.g. Knights moving in L-shapes). We also added `isPathBlocked()` to prevent sliding pieces (Rooks, Bishops, Queens) from jumping over other pieces.
+- **Rule Enforcement:** You can no longer capture your own pieces or drag pieces to illegal squares.
+
+### 3. Captured Pieces Tracking & MoveResult Structure
+- **Files:** `Game.java`, `MoveResult.java` (New File)
+- **What Changed:** Created a new lightweight `MoveResult` record to pass comprehensive move validation results back to the GUI. The backend `Game` class now also maintains lists of `capturedWhitePieces` and `capturedBlackPieces`.
+
+### 4. Added Live Move History and Captured Pieces UI
+- **File:** `ChessGUI.java`
+- **What Changed:** 
+  - **Move History:** A new scrollable side panel (`JTextArea`) was added to the right side of the window to display a real-time list of Algebraic moves (e.g. `1. e2e4`).
+  - **Captured Pieces:** A new window panel was added to the left side of the screen displaying two sections ("Captured by White" and "Captured by Black"). Whenever a piece is captured, the UI automatically appends the corresponding Unicode piece symbol to the respective section.
+
+## Verification
+
+> [!NOTE]
+> Since this is a GUI application and the Java compiler (`javac`) is not globally configured in your terminal environment, automated testing could not execute the app.
+
+Please compile and run `HelloChess` through your IDE (Eclipse) to test these changes manually. 
+
+**Manual Testing Steps:**
+1. Run `JoshMain.java` to launch the GUI.
+2. Drag `e2` to `e4` (Pawn). The move should appear in the Move History panel on the right.
+3. Try an illegal move (e.g. moving a Rook diagonally). A dialog should pop up saying "Illegal Move: Illegal move pattern or blocked".
+4. Move pieces to capture an opponent's piece. The captured piece's Unicode symbol should immediately appear in the correct "Captured Pieces" section on the left.

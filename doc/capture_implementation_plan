@@ -1,0 +1,77 @@
+# Architecture Analysis & Implementation Plan
+
+This document outlines the analysis of the existing backend architecture, the identified logic flaws related to piece captures, and a proposed plan for adding UI enhancements and robust state management.
+
+## 1. Analysis of Current Architecture
+
+The `HelloChess` prototype uses a model-view architecture, but there's currently a disconnect between what the backend knows and what the GUI displays. 
+- **Backend:** Tracks state using `Game`, `Grid` (representing the board), and `Position` (representing move history snapshots).
+- **GUI:** `ChessGUI` uses a 2D array (`boardState`) to draw pieces and relies on its own Drag-and-Drop listener to calculate moves algebraically (e.g., "e2 e4").
+
+### 🛑 Logic Flaw: Why Captures Fail
+
+The problem with piece capturing lies within `Position.java`, specifically the `setPosition` method:
+
+```java
+public Boolean setPosition(Piece piece, String start_position, String end_position) {
+    if (!committed){
+        if (position_map.get(end_position)==null) { // 🚨 FLAW HERE
+            position_map.replace(end_position, piece);
+            // ... removes piece from start_position
+        }
+        return true;
+    }
+    // ...
+}
+```
+
+**The Issue:** The backend literally ignores the move if the destination square (`end_position`) is already occupied. It only executes the move if `position_map.get(end_position) == null`. However, the method still returns `true`, which tricks the GUI into thinking the move was successful. The GUI updates its visual `boardState`, but the backend never updates its internal `position_map`. This causes a total desync between the GUI and the actual backend game state.
+
+---
+
+## 2. Proposed Changes
+
+We will systematically fix the logic flaw and implement the new features without overhauling the entire system.
+
+### [MODIFY] `Position.java`
+- Remove the `if (position_map.get(end_position) == null)` constraint so pieces can overwrite occupied squares.
+- Change `setPosition` to return the `Piece` that was captured (or `null` if none was captured) instead of a `Boolean`.
+
+### [MODIFY] `Game.java`
+- Introduce two new lists to track captured pieces: `List<Piece> capturedWhitePieces` and `List<Piece> capturedBlackPieces`.
+- Update `processMove()` and `executeInternalMove()` to capture the piece returned by `Position.setPosition()` and add it to the corresponding captured list.
+- Change the return type of `processMove()` from `boolean` to a custom object (e.g., `MoveResult`) so the GUI knows *if* the move was valid, *what* piece was captured, and any other relevant state.
+
+### [NEW] `MoveResult.java`
+- A lightweight data class/record to pass structured information from the backend to the GUI. 
+- Fields: `boolean isValid`, `Piece capturedPiece`, `String algebraicMove`.
+
+### [MODIFY] `ChessGUI.java`
+- **Move History Panel:** Replace the "Quit & Summary" button mechanism with a persistent, scrollable `JTextArea` or `JList` docked to the `BorderLayout.EAST` or `WEST`. This will update in real-time as moves are made.
+- **Captured Pieces Window:** Add two horizontal `JPanel`s (e.g., one at `BorderLayout.NORTH` for Black's captured pieces, and one at `BorderLayout.SOUTH` for White's captured pieces) that dynamically render Unicode chess symbols of the captured pieces as reported by the `MoveResult`.
+
+---
+
+### [NEW] Move Validation Logic
+To ensure pieces only move according to their legal chess patterns, we will introduce a validation mechanism in the backend.
+
+#### [MODIFY] `Game.java`
+- Introduce a `isValidMove(String start, String dest, Piece piece)` method.
+- The method will:
+  1. Convert algebraic coordinates (e.g., "e2" -> file 'e', rank 2) to numeric coordinates for easier math.
+  2. Implement basic geometric validation based on `piece.getType()` (e.g., Knights move in L-shapes, Bishops on diagonals).
+  3. Ensure a piece cannot capture another piece of the same `PieceColor`.
+  4. Ensure sliding pieces (Rooks, Bishops, Queens) do not jump over other pieces by checking the `Grid` or current `Position` map for obstructions.
+- Hook this up to `processMove()` so that illegal moves return an invalid `MoveResult` and the GUI rejects them.
+
+> [!NOTE]
+> For this initial implementation, we will stick to basic piece movement rules. Advanced rules like *En Passant*, *Castling*, and *Pins/Checks* (preventing a move that puts your own king in check) can be added in a subsequent phase if desired.
+
+## Verification Plan
+
+### Manual Verification
+1. Run `JoshMain.java` which launches the GUI.
+2. Drag a White Pawn onto a Black Pawn.
+3. Observe the Move History Panel updates with the move (e.g., "1. e2d7").
+4. Observe the Black Pawn is removed from the board and appears in the "Captured by White" UI panel.
+5. Review backend logs to ensure the backend `Position` map successfully processed the overwrite and tracks the capture.
