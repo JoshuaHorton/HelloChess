@@ -1,4 +1,4 @@
-package HelloJosh;
+package HelloChess;
 
 public class Square {
 	private final int sRank;

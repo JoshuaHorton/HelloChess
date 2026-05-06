@@ -1,4 +1,4 @@
-package HelloJosh;
+package HelloChess;
 
 import java.io.IOException;
 import java.net.URISyntaxException;

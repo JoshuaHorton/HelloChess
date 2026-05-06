@@ -1,4 +1,4 @@
-package HelloJosh;
+package HelloChess;
 
 import javax.swing.*;
 import java.awt.*;
