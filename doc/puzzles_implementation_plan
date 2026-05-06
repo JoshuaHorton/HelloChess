@@ -1,0 +1,48 @@
+# Master Architecture Plan: Chess Engine & Puzzle Generator
+
+As both a Java development expert and a chess player, I recognize that transitioning from a basic move-validation prototype to a full-fledged chess engine capable of generating "Mate in 3" or tactical puzzles requires a significant architectural shift. 
+
+To achieve a clean backend, a beautiful GUI, and a dynamic puzzle generator, we need to restructure the application for **performance**, **search depth**, and **aesthetics**. Here is the high-level roadmap to achieve these goals.
+
+---
+
+## Phase 1: High-Performance Board Representation (Backend)
+To generate puzzles and evaluate tactical sequences 3 moves deep, the engine will need to analyze hundreds of thousands of positions per second. The current `HashMap<String, Piece>` approach is too slow for this.
+
+**Proposed Architecture:**
+1. **Bitboards or 1D Arrays (Mailbox 0x88):** We should replace `Grid` and `PositionMap` with a 64-square 1D array (`int[64]`) or Bitboards (`long[]` where each bit represents a square). This makes move generation nearly instantaneous via bitwise operations.
+2. **FEN (Forsyth-Edwards Notation):** Implement a FEN parser. FEN is the universal standard for representing a chess position. The puzzle generator will need to load and save positions using FEN strings (e.g., `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`).
+3. **Complete Rules Engine:** Separate move generation into its own class (`MoveGenerator`). This will add the missing rules: En Passant, Castling rights, Pawn Promotion, Pins, and strict Check/Checkmate detection.
+
+## Phase 2: Engine Evaluation & The Puzzle Generator
+To create a realistic puzzle (e.g., a sharp middlegame where White has a forced win in 3 moves), the application needs an analytical brain.
+
+**Proposed Architecture:**
+1. **The Search Algorithm (Minimax / Alpha-Beta Pruning):** We need to build a search tree that looks ahead. By implementing an Alpha-Beta pruning algorithm, the backend can evaluate positions to see if a forced mate or massive material advantage exists.
+2. **Puzzle Generation Pipeline:**
+   - **Step A (The Setup):** The engine plays a game against itself using a small degree of randomness to reach a realistic middlegame or endgame.
+   - **Step B (The Scan):** At each turn, the engine searches the position. It looks for a specific criteria: *Is there only ONE move that leads to a +5.0 advantage or a forced Mate in 1/2/3, while all other moves lose or draw?*
+   - **Step C (The Extraction):** If the criteria is met, the position is saved as a puzzle in FEN format, along with the 3-move solution sequence.
+
+## Phase 3: The "Premium" GUI
+Standard Java Swing can look very dated without heavy customization. A "nice-looking GUI" requires modern rendering.
+
+**Proposed Architecture Options:**
+We must choose an aesthetic path.
+- **Option A (Custom Swing & FlatLaf):** We keep the current Swing framework but apply **FlatLaf** (a modern Look and Feel library). We replace the Unicode text pieces with high-resolution SVG or PNG images, and use `Graphics2D` to draw smooth gradients, highlight last-move trails, and animate piece sliding.
+- **Option B (JavaFX):** We migrate the GUI to JavaFX, which uses CSS for styling. This allows for gorgeous drop-shadows, glow effects, and incredibly smooth drag-and-drop animations with minimal code.
+- **Option C (Web Frontend / Java Backend):** We turn the Java engine into a lightweight local server (via simple sockets or Spring Boot) and build the UI in HTML/JS/CSS. This allows for absolute maximum visual polish, glassmorphism, and dynamic web animations.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]  
+> This roadmap represents a massive leap in complexity. We should tackle it in phases.
+> 
+> **Question 1 (Backend):** Are you comfortable throwing away the current `HashMap` board state to rebuild the core using a fast 1D Array or Bitboard system? (This is mandatory if we want the engine to be fast enough to generate its own puzzles).
+>
+> **Question 2 (Frontend):** Which GUI path appeals to you the most? Do you want to stick with Swing (Option A), move to JavaFX (Option B), or build a Web UI (Option C)?
+
+## Verification Plan
+*We will not write code until the architectural path is agreed upon. Once decided, we will break Phase 1 into granular tasks.*
