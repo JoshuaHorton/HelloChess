@@ -96,6 +96,11 @@ public class ChessGUI extends JFrame {
     
     private void addControlPanel() {
         JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        
+        JButton puzzleBtn = new JButton("Play Puzzle");
+        puzzleBtn.setFont(new Font("SansSerif", Font.BOLD, 12));
+        puzzleBtn.addActionListener(_ -> loadRandomPuzzle());
+        
         JButton quitBtn = new JButton("Quit & Summary");
         
         quitBtn.setFont(new Font("SansSerif", Font.BOLD, 12));
@@ -106,8 +111,30 @@ public class ChessGUI extends JFrame {
             System.exit(0);
         });
 
+        controlPanel.add(puzzleBtn);
         controlPanel.add(quitBtn);
         add(controlPanel, BorderLayout.NORTH);
+    }
+    
+    private void loadRandomPuzzle() {
+        try {
+            java.util.List<String> lines = java.nio.file.Files.readAllLines(new java.io.File("C:\\Users\\jcarl\\Projects\\GitHub\\HelloChess\\HelloChess\\puzzles.txt").toPath());
+            if (!lines.isEmpty()) {
+                String fen = lines.get(new java.util.Random().nextInt(lines.size()));
+                FenParser.loadFEN(backend.getBoard(), fen);
+                history.clear();
+                historyTextArea.setText("");
+                moveCount = 1;
+                capturedWhiteLabel.setText(" Captured by Black: ");
+                capturedBlackLabel.setText(" Captured by White: ");
+                statusLabel.setText("Puzzle Loaded! " + (backend.getBoard().isWhiteTurn ? "White's Turn" : "Black's Turn"));
+                boardPanel.repaint();
+            } else {
+                JOptionPane.showMessageDialog(this, "No puzzles found in puzzles.txt");
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Failed to load puzzles.txt: " + ex.getMessage());
+        }
     }
 
     private void showMoveHistory() {
