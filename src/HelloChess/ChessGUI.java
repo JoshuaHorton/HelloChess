@@ -190,8 +190,8 @@ public class ChessGUI extends JFrame {
             boardState[to.row()][to.col()] = piece;
             boardState[from.row()][from.col()] = "";
             
-            if (result.capturedPiece() != null) {
-                if (result.capturedPiece().getColor().equals("WHITE")) {
+            if (result.capturedPiece() != 0) {
+                if (result.capturedPiece() > 0) {
                     capturedWhiteLabel.setText(capturedWhiteLabel.getText() + getUnicodePiece(result.capturedPiece()));
                 } else {
                     capturedBlackLabel.setText(capturedBlackLabel.getText() + getUnicodePiece(result.capturedPiece()));
@@ -206,15 +206,15 @@ public class ChessGUI extends JFrame {
         }
     }
     
-    private String getUnicodePiece(Piece p) {
-        boolean isWhite = p.getColor().equals("WHITE");
-        return switch (p.getType()) {
-            case "KING" -> isWhite ? "♔" : "♚";
-            case "QUEEN" -> isWhite ? "♕" : "♛";
-            case "ROOK" -> isWhite ? "♖" : "♜";
-            case "BISHOP" -> isWhite ? "♗" : "♝";
-            case "KNIGHT" -> isWhite ? "♘" : "♞";
-            case "PAWN" -> isWhite ? "♙" : "♟";
+    private String getUnicodePiece(int piece) {
+        boolean isWhite = piece > 0;
+        return switch (Math.abs(piece)) {
+            case 6 -> isWhite ? "♔" : "♚";
+            case 5 -> isWhite ? "♕" : "♛";
+            case 4 -> isWhite ? "♖" : "♜";
+            case 3 -> isWhite ? "♗" : "♝";
+            case 2 -> isWhite ? "♘" : "♞";
+            case 1 -> isWhite ? "♙" : "♟";
             default -> "";
         };
     }
