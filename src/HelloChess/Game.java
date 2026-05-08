@@ -15,6 +15,7 @@ public class Game {
 
     public List<Integer> getCapturedWhitePieces() { return capturedWhitePieces; }
     public List<Integer> getCapturedBlackPieces() { return capturedBlackPieces; }
+    public FastBoard getBoard() { return board; }
 
     public MoveResult processMove(String moveInput) {
         try {

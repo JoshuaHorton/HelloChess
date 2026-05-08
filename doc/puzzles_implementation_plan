@@ -1,48 +1,76 @@
-# Master Architecture Plan: Chess Engine & Puzzle Generator
+# Implementation Strategy: Fast Engine & Premium Swing GUI
 
-As both a Java development expert and a chess player, I recognize that transitioning from a basic move-validation prototype to a full-fledged chess engine capable of generating "Mate in 3" or tactical puzzles requires a significant architectural shift. 
+Based on your requirement to avoid external dependencies (like Maven or JavaFX), we will utilize **Vanilla Java Swing** but push it to its absolute limits. By overriding default rendering and implementing our own custom drawing logic, we can achieve a highly premium look and feel that rivals modern frameworks.
 
-To achieve a clean backend, a beautiful GUI, and a dynamic puzzle generator, we need to restructure the application for **performance**, **search depth**, and **aesthetics**. Here is the high-level roadmap to achieve these goals.
+## Proposed Technical Standards & Specifications
 
----
+### 1. Data Structures & Engine
+*   **Board Indexing:** The `int[64]` array will use a **Row-Major A1=0** layout. Index `0` represents `A1` (bottom-left), index `7` is `H1`, and index `63` is `H8`. This allows simple bitwise/math operations: `rank = index / 8`, `file = index % 8`.
+*   **Piece Encoding Scheme:** We will use a positive/negative integer mapping.
+    *   `0`: Empty
+    *   `1`-`6`: White (Pawn=1, Knight=2, Bishop=3, Rook=4, Queen=5, King=6)
+    *   `-1`-`-6`: Black (same piece values negated)
+    *   *Rationale:* Checking piece color becomes a simple `Math.signum(piece)` or `piece > 0` check.
+*   **Move Representation:** A move will be encoded as a single 32-bit `int` to avoid object allocation during search.
+    *   Bits 0-5: `from` square (0-63)
+    *   Bits 6-11: `to` square (0-63)
+    *   Bits 12-15: Piece moved
+    *   Bits 16-19: Piece captured (0 if none)
+    *   Bits 20-23: Promoted piece (0 if none)
+    *   Bits 24-27: Special flags (Castling, En Passant)
+*   **Game State Tracking:** `FastBoard` will store the board array alongside primitive state variables: `boolean isWhiteTurn`, `int castlingRights` (4-bit mask for WK, WQ, BK, BQ), `int enPassantTarget` (-1 if none), and `int halfMoveClock`.
 
-## Phase 1: High-Performance Board Representation (Backend)
-To generate puzzles and evaluate tactical sequences 3 moves deep, the engine will need to analyze hundreds of thousands of positions per second. The current `HashMap<String, Piece>` approach is too slow for this.
+### 2. UI & Rendering
+*   **Sprite Sheet Layout:** The `chess_pieces_sprite.png` will be organized in a **2x6 grid**.
+    *   Row 1: White Pieces (King, Queen, Bishop, Knight, Rook, Pawn)
+    *   Row 2: Black Pieces (King, Queen, Bishop, Knight, Rook, Pawn)
+*   **Chroma-Key Target:** The background to be keyed out will be pure green `#00FF00` (RGB: 0, 255, 0).
+*   **Coordinate Mapping:** The board will dynamically scale. `squareSize = Math.min(panel.getWidth(), panel.getHeight()) / 8`. Board drawing will be centered. Mouse coordinates will be translated by subtracting the board's margin offsets and dividing by `squareSize`.
 
-**Proposed Architecture:**
-1. **Bitboards or 1D Arrays (Mailbox 0x88):** We should replace `Grid` and `PositionMap` with a 64-square 1D array (`int[64]`) or Bitboards (`long[]` where each bit represents a square). This makes move generation nearly instantaneous via bitwise operations.
-2. **FEN (Forsyth-Edwards Notation):** Implement a FEN parser. FEN is the universal standard for representing a chess position. The puzzle generator will need to load and save positions using FEN strings (e.g., `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`).
-3. **Complete Rules Engine:** Separate move generation into its own class (`MoveGenerator`). This will add the missing rules: En Passant, Castling rights, Pawn Promotion, Pins, and strict Check/Checkmate detection.
-
-## Phase 2: Engine Evaluation & The Puzzle Generator
-To create a realistic puzzle (e.g., a sharp middlegame where White has a forced win in 3 moves), the application needs an analytical brain.
-
-**Proposed Architecture:**
-1. **The Search Algorithm (Minimax / Alpha-Beta Pruning):** We need to build a search tree that looks ahead. By implementing an Alpha-Beta pruning algorithm, the backend can evaluate positions to see if a forced mate or massive material advantage exists.
-2. **Puzzle Generation Pipeline:**
-   - **Step A (The Setup):** The engine plays a game against itself using a small degree of randomness to reach a realistic middlegame or endgame.
-   - **Step B (The Scan):** At each turn, the engine searches the position. It looks for a specific criteria: *Is there only ONE move that leads to a +5.0 advantage or a forced Mate in 1/2/3, while all other moves lose or draw?*
-   - **Step C (The Extraction):** If the criteria is met, the position is saved as a puzzle in FEN format, along with the 3-move solution sequence.
-
-## Phase 3: The "Premium" GUI
-Standard Java Swing can look very dated without heavy customization. A "nice-looking GUI" requires modern rendering.
-
-**Proposed Architecture Options:**
-We must choose an aesthetic path.
-- **Option A (Custom Swing & FlatLaf):** We keep the current Swing framework but apply **FlatLaf** (a modern Look and Feel library). We replace the Unicode text pieces with high-resolution SVG or PNG images, and use `Graphics2D` to draw smooth gradients, highlight last-move trails, and animate piece sliding.
-- **Option B (JavaFX):** We migrate the GUI to JavaFX, which uses CSS for styling. This allows for gorgeous drop-shadows, glow effects, and incredibly smooth drag-and-drop animations with minimal code.
-- **Option C (Web Frontend / Java Backend):** We turn the Java engine into a lightweight local server (via simple sockets or Spring Boot) and build the UI in HTML/JS/CSS. This allows for absolute maximum visual polish, glassmorphism, and dynamic web animations.
+### 3. AI & Puzzle Generation
+*   **Evaluation Function:** `SearchEngine.java` will use Material counting combined with simplified **Piece-Square Tables (PST)** to evaluate positions. PSTs encourage knights to the center, pawns to advance, and the king to stay safe, providing more realistic evaluations than material alone.
+*   **Mining Logic:** `PuzzleMiner` will **not** play purely random games. Instead, it will use `SearchEngine` at a shallow depth (e.g., Depth 1 or 2) combined with random selection among the "top 3" best moves. This generates semi-logical games that reach realistic middlegames where tactical puzzles naturally occur.
 
 ---
 
-## User Review Required
+## Phase 1: The "Strangler Fig" Backend Rewrite
+We will build the new high-performance engine alongside the old code, allowing the GUI to keep functioning during the transition.
 
-> [!IMPORTANT]  
-> This roadmap represents a massive leap in complexity. We should tackle it in phases.
-> 
-> **Question 1 (Backend):** Are you comfortable throwing away the current `HashMap` board state to rebuild the core using a fast 1D Array or Bitboard system? (This is mandatory if we want the engine to be fast enough to generate its own puzzles).
->
-> **Question 2 (Frontend):** Which GUI path appeals to you the most? Do you want to stick with Swing (Option A), move to JavaFX (Option B), or build a Web UI (Option C)?
+1. **Create the Fast Core:** Introduce a new `FastBoard` class using the `int[64]` layout defined above.
+2. **The New Move Generator:** Build a `MoveGenerator` class that reads the `int[64]` array and generates a list of encoded integer moves.
+3. **The Swap:** Update `Game.processMove()` to query the new `FastBoard`. Once stable, we delete `Position`, `Grid`, and `Piece`.
 
-## Verification Plan
-*We will not write code until the architectural path is agreed upon. Once decided, we will break Phase 1 into granular tasks.*
+## Phase 2: Pushing Swing to the Limit (Premium UI)
+1. **Custom Graphics2D Rendering:** Create a `BoardPanel` overriding `paintComponent(Graphics g)`. Enable anti-aliasing and draw scalable, smooth gradient backgrounds for the squares.
+2. **High-Res Assets & Slicing:** Build `SpriteSlicer.java` to slice the 2x6 sprite sheet and apply the `#00FF00` chroma-key. Add subtle drop-shadows via `Graphics2D` during render.
+3. **Smooth Animations:** Implement a 60 FPS `javax.swing.Timer`. Pieces will smoothly slide across the screen over ~200 milliseconds.
+4. **Visual Highlights & Alpha Composites:** Draw semi-transparent overlays (ghosts for dragging, dots for legal moves).
+
+## Phase 3: The Puzzle Generator
+1. **The Search Engine:** Build an `AlphaBetaSearch` class using the Material + PST evaluation function.
+2. **The FEN Parser:** Implement Forsyth-Edwards Notation parsing to load and save states.
+3. **The Mining Logic:** Write `PuzzleMiner` to play semi-logical games and search for Mate-in-3s, saving to `puzzles.txt`.
+4. **The UI Integration:** Add a "Puzzle Mode" button to load FENs and challenge the user.
+
+---
+
+## Execution Task List
+
+### Phase 1: Fast Core Backend
+- [ ] **[NEW] `FastBoard.java`**: Implements the `int[64]` array and state primitives.
+- [ ] **[NEW] `MoveGenerator.java`**: Handles standard chess logic returning `int` encoded moves.
+- [ ] **[MODIFY] `Game.java`**: Update `processMove()` to use `FastBoard`.
+- [ ] **[DELETE] `Position.java`, `Grid.java`, `Square.java`, `Piece.java`**.
+
+### Phase 2: Premium Swing UI
+- [x] **[NEW] `chess_pieces_sprite.png`**: Asset generated.
+- [ ] **[NEW] `SpriteSlicer.java`**: Slices 2x6 layout, removes `#00FF00` background.
+- [ ] **[NEW] `BoardPanel.java`**: Extends `JPanel`, overrides `paintComponent()`. Handles dynamic scaling, drawing, and animations.
+- [ ] **[MODIFY] `ChessGUI.java`**: Replace `JButton[][]` with `BoardPanel`.
+
+### Phase 3: Puzzle Generator
+- [ ] **[NEW] `SearchEngine.java`**: Alpha-Beta search with Material+PST evaluation.
+- [ ] **[NEW] `FenParser.java`**: Converts between `FastBoard` and FEN strings.
+- [ ] **[NEW] `PuzzleMiner.java`**: Plays semi-logical games to find Mate-in-3 scenarios.
+- [ ] **[NEW] `puzzles.txt`**: Stores generated FEN strings.
+- [ ] **[MODIFY] `ChessGUI.java`**: Add "Play Puzzle" mode.
