@@ -1,0 +1,40 @@
+# Implementation Strategy: High-Performance Engine & JavaFX Migration
+
+Based on your feedback, we are pivoting to a high-performance **1D Array backend** and a **JavaFX frontend**, steering clear of web servers while setting the stage for the puzzle generator.
+
+Here is the step-by-step strategy to refactor the codebase gracefully, ensuring we never "break" the existing game functionality while we transition.
+
+---
+
+## Phase 1: The "Strangler Fig" Backend Rewrite
+Instead of deleting the old code immediately, we will build the new engine alongside it and slowly route traffic to it.
+
+1. **Create the Fast Core:** Introduce a new `FastBoard` class that uses an `int[64]` array. Pieces will be represented by simple integers (e.g., `WHITE_PAWN = 1`, `BLACK_KING = 12`, `EMPTY = 0`). This eliminates the massive overhead of `Piece` objects and `HashMap` lookups.
+2. **The New Move Generator:** Build a `MoveGenerator` class that reads the `int[64]` array and outputs a list of valid integer moves. This will encompass all standard rules (En Passant, Castling, etc.).
+3. **The Swap:** We will update the existing `Game.java` so that its `processMove()` method stops using `Position.java` and instead queries our new `FastBoard`. 
+   * **Result:** The current Swing GUI will remain completely unchanged, but it will secretly be running on the new high-performance engine. Once this is stable, we delete `Position`, `Grid`, and `Piece`.
+
+## Phase 2: The JavaFX Migration
+With a fast, stable engine in place, we migrate the visual layer.
+
+1. **Setup JavaFX:** Introduce a new entry point (`ChessAppFX.java`) alongside the existing `JoshMain.java`. 
+2. **Build the Premium UI:** Use JavaFX's `Canvas` or `GridPane` to render the board. We will apply CSS for premium aesthetics—think smooth gradients, subtle drop shadows for the pieces, and fluid sliding animations when a piece is captured.
+3. **Wire it Up:** Connect the new JavaFX interface to `Game.java`. 
+4. **The Sunset:** Once the JavaFX version is fully playable and looks great, we will safely delete the old `ChessGUI.java` (Swing) classes.
+
+## Phase 3: The Puzzle Generator
+Now that we have a fast engine and a beautiful UI, we build the puzzle logic.
+
+1. **The Search Engine:** Build an `AlphaBetaSearch` class that can evaluate `FastBoard` positions incredibly quickly to determine who is winning.
+2. **The FEN Parser:** Add the ability to save and load `FastBoard` states using FEN strings.
+3. **The Mining Logic:** Write a script that plays random moves internally. At each step, it asks the `AlphaBetaSearch`: *"Is there a forced mate in 3 here?"* If yes, it saves the FEN string to a local file.
+4. **The UI Integration:** Add a "Training Mode" button in the JavaFX GUI that loads a random FEN string from the puzzle file and restricts the user to 3 moves.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> Because JavaFX is not bundled with the standard JDK starting from Java 11, we will need to manage it as a dependency. 
+> 
+> **Question:** Are you currently using a build tool like **Maven** (`pom.xml`) or **Gradle** (`build.gradle`) in this project? If not, we will need to set one up to easily pull in the JavaFX libraries, or you will need to manually configure the JavaFX SDK in your Eclipse build path. How would you like to handle the JavaFX dependency?
