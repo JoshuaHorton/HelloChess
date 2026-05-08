@@ -55,7 +55,7 @@ public class ChessGUI extends JFrame {
     }
 
     private void initializeBoard() {
-        boardPanel = new BoardPanel(backend, "C:\\Users\\jcarl\\Projects\\GitHub\\HelloChess\\HelloChess\\src\\HelloChess\\chess_pieces_sprite.png", result -> {
+        boardPanel = new BoardPanel(backend, result -> {
             if (result.isValid()) {
                 boolean isWhite = !backend.getBoard().isWhiteTurn; // it was flipped after move
                 String logEntry = isWhite ? (moveCount + ". " + result.algebraicMove()) : ("    ... " + result.algebraicMove());

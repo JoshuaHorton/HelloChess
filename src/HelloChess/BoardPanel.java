@@ -3,20 +3,18 @@ package HelloChess;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.image.BufferedImage;
 import java.awt.geom.Ellipse2D;
 import java.util.List;
 import java.util.function.Consumer;
 
 public class BoardPanel extends JPanel {
     private Game game;
-    private SpriteSlicer slicer;
     private FastBoard currentBoard;
     private Consumer<MoveResult> onMoveCallback;
     
-    private final Color lightColor = new Color(240, 217, 181);
-    private final Color darkColor = new Color(181, 136, 99);
-    private final Color highlightColor = new Color(130, 151, 105, 150);
+    private final Color lightColor = new Color(255, 255, 255);
+    private final Color darkColor = new Color(153, 191, 230);
+    private final Color highlightColor = new Color(255, 255, 51, 150);
     
     private int squareSize;
     private int boardX, boardY;
@@ -31,10 +29,9 @@ public class BoardPanel extends JPanel {
     private long animStartTime;
     private static final int ANIM_DURATION_MS = 200;
 
-    public BoardPanel(Game game, String spritePath, Consumer<MoveResult> onMoveCallback) {
+    public BoardPanel(Game game, Consumer<MoveResult> onMoveCallback) {
         this.game = game;
         this.onMoveCallback = onMoveCallback;
-        this.slicer = new SpriteSlicer(spritePath);
         this.currentBoard = game.getBoard();
         
         setPreferredSize(new Dimension(640, 640));
@@ -42,7 +39,7 @@ public class BoardPanel extends JPanel {
         MouseAdapter ma = new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                if (animProgress < 1.0f) return; // Prevent drag during animation
+                if (animProgress < 1.0f) return;
                 int sq = getSquareFromPoint(e.getPoint());
                 if (sq != -1) {
                     int piece = currentBoard.getPiece(sq);
@@ -126,7 +123,7 @@ public class BoardPanel extends JPanel {
         super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g;
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2d.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         
         squareSize = Math.min(getWidth(), getHeight()) / 8;
         boardX = (getWidth() - 8 * squareSize) / 2;
@@ -139,8 +136,7 @@ public class BoardPanel extends JPanel {
                 
                 boolean isLight = (rank + file) % 2 != 0;
                 Color baseColor = isLight ? lightColor : darkColor;
-                GradientPaint gp = new GradientPaint(x, y, baseColor.brighter(), x + squareSize, y + squareSize, baseColor.darker());
-                g2d.setPaint(gp);
+                g2d.setColor(baseColor);
                 g2d.fillRect(x, y, squareSize, squareSize);
                 
                 if (dragSourceSquare == rank * 8 + file) {
@@ -175,20 +171,16 @@ public class BoardPanel extends JPanel {
                 
                 int piece = currentBoard.getPiece(index);
                 if (piece != FastBoard.EMPTY) {
-                    BufferedImage img = slicer.getPieceImage(piece);
-                    if (img != null) {
-                        int x = boardX + file * squareSize;
-                        int y = boardY + (7 - rank) * squareSize;
-                        drawPieceWithShadow(g2d, img, x, y, squareSize);
-                    }
+                    int x = boardX + file * squareSize;
+                    int y = boardY + (7 - rank) * squareSize;
+                    drawPiece(g2d, piece, x, y, squareSize);
                 }
             }
         }
         
         if (animProgress < 1.0f && animFrom != -1 && animTo != -1) {
             int piece = currentBoard.getPiece(animTo);
-            BufferedImage img = slicer.getPieceImage(piece);
-            if (img != null) {
+            if (piece != FastBoard.EMPTY) {
                 int startFile = animFrom % 8;
                 int startRank = animFrom / 8;
                 int endFile = animTo % 8;
@@ -203,14 +195,13 @@ public class BoardPanel extends JPanel {
                 int currX = (int) (startX + (endX - startX) * t);
                 int currY = (int) (startY + (endY - startY) * t);
                 
-                drawPieceWithShadow(g2d, img, currX, currY, squareSize);
+                drawPiece(g2d, piece, currX, currY, squareSize);
             }
         }
         
         if (dragSourceSquare != -1 && dragPoint != null) {
             int piece = currentBoard.getPiece(dragSourceSquare);
-            BufferedImage img = slicer.getPieceImage(piece);
-            if (img != null) {
+            if (piece != FastBoard.EMPTY) {
                 int file = dragSourceSquare % 8;
                 int rank = dragSourceSquare / 8;
                 int ox = boardX + file * squareSize;
@@ -218,12 +209,12 @@ public class BoardPanel extends JPanel {
                 
                 Composite oldComp = g2d.getComposite();
                 g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.5f));
-                drawPieceWithShadow(g2d, img, ox, oy, squareSize);
+                drawPiece(g2d, piece, ox, oy, squareSize);
                 g2d.setComposite(oldComp);
                 
                 int x = dragPoint.x - squareSize / 2;
                 int y = dragPoint.y - squareSize / 2;
-                drawPieceWithShadow(g2d, img, x, y, squareSize);
+                drawPiece(g2d, piece, x, y, squareSize);
             }
         }
     }
@@ -232,12 +223,42 @@ public class BoardPanel extends JPanel {
         return t * t * t * (t * (t * 6 - 15) + 10);
     }
     
-    private void drawPieceWithShadow(Graphics2D g2d, BufferedImage img, int x, int y, int size) {
-        Composite oldComp = g2d.getComposite();
-        g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
-        g2d.drawImage(img, x + size/10, y + size/10, size, size, null);
+    private String getSolidUnicodePiece(int piece) {
+        return switch (Math.abs(piece)) {
+            case FastBoard.W_KING -> "♚";
+            case FastBoard.W_QUEEN -> "♛";
+            case FastBoard.W_ROOK -> "♜";
+            case FastBoard.W_BISHOP -> "♝";
+            case FastBoard.W_KNIGHT -> "♞";
+            case FastBoard.W_PAWN -> "♟";
+            default -> "";
+        };
+    }
+    
+    private void drawPiece(Graphics2D g2d, int piece, int x, int y, int size) {
+        String str = getSolidUnicodePiece(piece);
+        if (str.isEmpty()) return;
         
-        g2d.setComposite(oldComp);
-        g2d.drawImage(img, x, y, size, size, null);
+        g2d.setFont(new Font("Segoe UI Symbol", Font.PLAIN, (int)(size * 0.8)));
+        FontMetrics fm = g2d.getFontMetrics();
+        int textX = x + (size - fm.stringWidth(str)) / 2;
+        int textY = y + ((size - fm.getHeight()) / 2) + fm.getAscent();
+        
+        boolean isWhite = piece > 0;
+        
+        if (isWhite) {
+            // Draw a white piece with a crisp dark outline
+            g2d.setColor(new Color(40, 40, 40));
+            g2d.drawString(str, textX - 1, textY - 1);
+            g2d.drawString(str, textX + 1, textY + 1);
+            g2d.drawString(str, textX - 1, textY + 1);
+            g2d.drawString(str, textX + 1, textY - 1);
+            g2d.setColor(Color.WHITE);
+            g2d.drawString(str, textX, textY);
+        } else {
+            // Draw a flat black piece
+            g2d.setColor(new Color(30, 30, 30));
+            g2d.drawString(str, textX, textY);
+        }
     }
 }
