@@ -29,6 +29,13 @@ public class BoardPanel extends JPanel {
     private long animStartTime;
     private static final int ANIM_DURATION_MS = 200;
 
+    // AI deliberation highlights
+    private int aiEvaluatingFrom = -1;
+    private int aiEvaluatingTo = -1;
+    private int aiBestFrom = -1;
+    private int aiBestTo = -1;
+    private boolean inputBlocked = false;
+
     public BoardPanel(Game game, Consumer<MoveResult> onMoveCallback) {
         this.game = game;
         this.onMoveCallback = onMoveCallback;
@@ -39,7 +46,7 @@ public class BoardPanel extends JPanel {
         MouseAdapter ma = new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                if (animProgress < 1.0f) return;
+                if (inputBlocked || animProgress < 1.0f) return;
                 int sq = getSquareFromPoint(e.getPoint());
                 if (sq != -1) {
                     int piece = currentBoard.getPiece(sq);
@@ -53,6 +60,7 @@ public class BoardPanel extends JPanel {
             
             @Override
             public void mouseReleased(MouseEvent e) {
+                if (inputBlocked) return;
                 if (dragSourceSquare != -1) {
                     int destSq = getSquareFromPoint(e.getPoint());
                     if (destSq != -1 && destSq != dragSourceSquare) {
@@ -83,7 +91,7 @@ public class BoardPanel extends JPanel {
                             animationTimer.start();
                         } else {
                             if (onMoveCallback != null) {
-                                onMoveCallback.accept(res);
+                                  onMoveCallback.accept(res);
                             }
                         }
                     }
@@ -95,6 +103,7 @@ public class BoardPanel extends JPanel {
             
             @Override
             public void mouseDragged(MouseEvent e) {
+                if (inputBlocked) return;
                 if (dragSourceSquare != -1) {
                     dragPoint = e.getPoint();
                     repaint();
@@ -103,6 +112,56 @@ public class BoardPanel extends JPanel {
         };
         addMouseListener(ma);
         addMouseMotionListener(ma);
+    }
+
+    public void setEvaluatingMove(int from, int to) {
+        this.aiEvaluatingFrom = from;
+        this.aiEvaluatingTo = to;
+        repaint();
+    }
+
+    public void setBestCandidateMove(int from, int to) {
+        this.aiBestFrom = from;
+        this.aiBestTo = to;
+        repaint();
+    }
+
+    public void clearAIHighlights() {
+        this.aiEvaluatingFrom = -1;
+        this.aiEvaluatingTo = -1;
+        this.aiBestFrom = -1;
+        this.aiBestTo = -1;
+        repaint();
+    }
+
+    public void setInputBlocked(boolean blocked) {
+        this.inputBlocked = blocked;
+    }
+
+    public void executeAIMove(int move, MoveResult res) {
+        int from = move & 0x3F;
+        int to = (move >> 6) & 0x3F;
+        
+        animFrom = from;
+        animTo = to;
+        currentBoard = game.getBoard();
+        
+        animProgress = 0.0f;
+        animStartTime = System.currentTimeMillis();
+        if (animationTimer != null) animationTimer.stop();
+        animationTimer = new Timer(16, ev -> {
+            long now = System.currentTimeMillis();
+            animProgress = (now - animStartTime) / (float) ANIM_DURATION_MS;
+            if (animProgress >= 1.0f) {
+                animProgress = 1.0f;
+                animationTimer.stop();
+                if (onMoveCallback != null) {
+                    onMoveCallback.accept(res);
+                }
+            }
+            repaint();
+        });
+        animationTimer.start();
     }
     
     private int getSquareFromPoint(Point p) {
@@ -144,6 +203,14 @@ public class BoardPanel extends JPanel {
                     g2d.fillRect(x, y, squareSize, squareSize);
                 }
             }
+        }
+        
+        // Draw AI deliberation overlays (under pieces, on top of board squares)
+        if (aiBestFrom != -1 && aiBestTo != -1) {
+            drawAIHighlight(g2d, aiBestFrom, aiBestTo, new Color(30, 144, 255, 50), new Color(30, 144, 255, 180));
+        }
+        if (aiEvaluatingFrom != -1 && aiEvaluatingTo != -1) {
+            drawAIHighlight(g2d, aiEvaluatingFrom, aiEvaluatingTo, new Color(138, 43, 226, 60), new Color(138, 43, 226, 200));
         }
         
         if (dragSourceSquare != -1) {
@@ -219,6 +286,39 @@ public class BoardPanel extends JPanel {
         }
     }
     
+    private void drawAIHighlight(Graphics2D g2d, int from, int to, Color fill, Color border) {
+        int fromFile = from % 8;
+        int fromRank = from / 8;
+        int fromX = boardX + fromFile * squareSize;
+        int fromY = boardY + (7 - fromRank) * squareSize;
+        
+        int toFile = to % 8;
+        int toRank = to / 8;
+        int toX = boardX + toFile * squareSize;
+        int toY = boardY + (7 - toRank) * squareSize;
+        
+        // Fill squares
+        g2d.setColor(fill);
+        g2d.fillRect(fromX, fromY, squareSize, squareSize);
+        g2d.fillRect(toX, toY, squareSize, squareSize);
+        
+        // Draw borders
+        Stroke oldStroke = g2d.getStroke();
+        g2d.setStroke(new BasicStroke(3.0f));
+        g2d.setColor(border);
+        g2d.drawRect(fromX + 1, fromY + 1, squareSize - 2, squareSize - 2);
+        g2d.drawRect(toX + 1, toY + 1, squareSize - 2, squareSize - 2);
+        
+        // Draw connecting line
+        int startX = fromX + squareSize / 2;
+        int startY = fromY + squareSize / 2;
+        int endX = toX + squareSize / 2;
+        int endY = toY + squareSize / 2;
+        g2d.drawLine(startX, startY, endX, endY);
+        
+        g2d.setStroke(oldStroke);
+    }
+    
     private float smootherStep(float t) {
         return t * t * t * (t * (t * 6 - 15) + 10);
     }
@@ -247,7 +347,6 @@ public class BoardPanel extends JPanel {
         boolean isWhite = piece > 0;
         
         if (isWhite) {
-            // Draw a white piece with a crisp dark outline
             g2d.setColor(new Color(40, 40, 40));
             g2d.drawString(str, textX - 1, textY - 1);
             g2d.drawString(str, textX + 1, textY + 1);
@@ -256,7 +355,6 @@ public class BoardPanel extends JPanel {
             g2d.setColor(Color.WHITE);
             g2d.drawString(str, textX, textY);
         } else {
-            // Draw a flat black piece
             g2d.setColor(new Color(30, 30, 30));
             g2d.drawString(str, textX, textY);
         }
